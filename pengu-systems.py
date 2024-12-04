@@ -1,20 +1,61 @@
-#ImportedObjects#
+import subprocess
+import sys
+import os
 
-from getpass import getpass
-import random
+# Function to create and activate a virtual environment
+def setup_virtual_environment():
+    venv_name = "PenguSystems"
+    # Check if the virtual environment already exists
+    if not os.path.exists(venv_name):
+        print(f"Creating virtual environment: {venv_name}")
+        subprocess.check_call([sys.executable, "-m", "venv", venv_name])
+        print("Installing required packages...")
+        subprocess.check_call([os.path.join(venv_name, "bin", "pip"), "install", "jaydebeapi", "bcrypt"])
+    else:
+        print(f"Activating virtual environment: {venv_name}")
+    
+    # Activate the virtual environment
+    if os.name == 'nt':
+        activate_script = os.path.join(venv_name, "Scripts", "activate.bat")
+        subprocess.call(activate_script, shell=True)
+    else:
+        activate_script = os.path.join(venv_name, "bin", "activate")
+        subprocess.call(f"source {activate_script}", shell=True)
 
-#version#
+# Call the setup function
+setup_virtual_environment()
 
-print("version: 2.01")
+###########################################################################################
+
+version = 2.01
+
+###########################################################################################
+
+print(f"version: {version}")
 print("")
 
-#classes#
+###########################################################################################
+
+import hashlib
+import jaydebeapi
+import bcrypt
+from getpass import getpass
+import random
 
 class usr:
     def __init__(self, name, pw) -> None:
         self.name = name
-        self.pw = pw
+        if len(pw) == 64:
+            self.pw = pw
+        else:
+            self.pw = self._hash_password(pw)
 
+    @staticmethod
+    def _hash_password(password):
+        hash_object = hashlib.sha256()
+        hash_object.update(password.encode('utf-8'))
+        password_hash = hash_object.hexdigest()
+        return password_hash
 user_list = []
 
 class expensive_objects:
@@ -23,76 +64,138 @@ class expensive_objects:
         self.price = object_price
     def __str__(self) -> str:
         return f"{self.name}"
-
 expensive_objects_list = []
 expensive_object = expensive_objects('Wallet on Chain Ivy 👝 - Luis Vuitton (purse)', 1850)
-
 expensive_objects_list.append(expensive_object)
 
-#definitions#
+###########################################################################################
+
+# Clean up lock file if exists
+lock_file_path = '/home/christoph/Desktop/python/pengu-systems/Data.odb.lck'
+if os.path.exists(lock_file_path):
+    os.remove(lock_file_path)
+
+# Initialize Database Connection
+hsqldb_jar = '/home/christoph/Desktop/python/hsqldb-2.7.4/hsqldb/lib/hsqldb.jar'
+url = 'jdbc:hsqldb:file:/home/christoph/Desktop/python/pengu-systems/Data.odb'
+
+conn = jaydebeapi.connect("org.hsqldb.jdbcDriver", url, ["SA", ""], hsqldb_jar)
+cursor = conn.cursor()
+
+conn.commit()
+
+# hash_password-check
+
+def hash_password(pw): 
+    password_bytes = pw.encode('utf-8') 
+    hashed = bcrypt.hashpw(password_bytes, bcrypt.gensalt()) 
+    return hashed.decode('utf-8')
+
+# load_users
 
 def load_users():
-    try:
-        with open("users.txt", "r") as file:
-            for line in file:
-                name, pw = line.strip().split(",")
-                user_list.append(usr(name, pw))
-    except FileNotFoundError:
-        pass
+    cursor.execute("SELECT username, password FROM UserData")
+    users = cursor.fetchall()
+    for name, pw in users:
+        user_list.append(usr(name, pw))
 
-def save_users():
-    with open("users.txt", "w") as file:
-        for user in user_list:
-            file.write(f"{user.name},{user.pw}\n")
+# save_user
+
+def save_user(user):
+    print(f"Saving user: {user.name}, Password: {user.pw}")
+    cursor.execute("INSERT INTO UserData (username, password) VALUES (?, ?)", [user.name, user.pw])
+    conn.commit()
+    print("User saved successfully")
+    verify_data()
+
+# Verify Data
+
+def verify_data():
+    cursor.execute("SELECT id, username, password FROM UserData")
+    users = cursor.fetchall()
+    print("Verifying data in the database:")
+    for user in users:
+        print(user)
+
+# user_list
+
+def users_list():
+    print("Existing usernames:")
+    for user in user_list:
+        print(user.name)
+
+# login_or_signup
 
 def login_or_signup():
     load_users()
-    ok = False
-    while ok == False:
+    while True:
         print("Do you want to login or signup?")
         answer = input("-> ")
-        if answer in ["login", "log in"]:
+        if answer in ["login", "log in", "lg"]:
+            os.system('cls' if os.name == 'nt' else 'clear')
             usrname = input("Enter your username: ")
-            pw = getpass("Enter your password: ")
-            for user in user_list:
-                if usrname == user.name:
-                    if pw == user.pw:
-                        ok = True
-                        print("")
-                        print(f"Welcome on board {usrname}! 🚢")
-                        what_do_you_want_to_do()  # Call what_do_you_want_to_do after logging in
-                    else:
-                        print("This password is incorrect, you will be sent back to the login process. 🔒")
-                        break
-            else:
+            if not any(user.name == usrname for user in user_list):
+                os.system('cls' if os.name == 'nt' else 'clear')
                 print("This username does not exist, you will be sent back to the login process. 🔒")
-        elif answer in ["signup", "sign up"]:
+                login_or_signup()
+            pw = getpass("Enter your password: ")
+            if any(user.name == usrname and bcrypt.checkpw(pw.encode('utf-8'), user.pw.encode('utf-8')) for user in user_list):
+                print("")
+                print(f"Welcome on board {usrname}! 🚢")
+                what_do_you_want_to_do()
+                return
+            else:
+                os.system('cls' if os.name == 'nt' else 'clear')
+                print("This password is incorrect, you will be sent back to the login process. 🔒")
+                login_or_signup()
+                break
+        elif answer in ["signup", "sign up", "sp"]:
             usrname = input("Enter your new username: ")
             pw = getpass("Enter your new password: ")
-            user_list.append(usr(usrname, pw))  # Add the new user to the user_list
-            save_users()  # Save the new user to the file
-            ok = True
+            hashed_pw = hash_password(pw)
+            new_user = usr(usrname, hashed_pw)
+            user_list.append(new_user)
+            save_user(new_user)
             print("")
+            os.system('cls' if os.name == 'nt' else 'clear')
             print(f"Welcome on board {usrname}! 🚢")
-            what_do_you_want_to_do()  # Call what_do_you_want_to_do after signing up
+            what_do_you_want_to_do()
+            return
+        elif answer in ["userlist",  "ulist", "ul", "user list"]:
+            print("")
+            users_list()
+            print("")
         else:
-            print(" -> Sorry pls answer with login or signup, thank you. 🤗")
+            os.system('cls' if os.name == 'nt' else 'clear')
+            print("-> Sorry pls answer with login or signup, thank you. 🤗")
+
+# what_do_you_want_to_do
+
 def what_do_you_want_to_do():
     ok = False
     while ok == False:
         print("What do you want to do?")
         print("-> you can [logout] or play [priceguesser]")
         answer = input("-> ")
-        if answer in ["logout", "log out"]:
+        if answer in ["logout", "log out", "lg"]:
+            os.system('cls' if os.name == 'nt' else 'clear')
             print("You've been locked out of the system 🔑")
             print("")
             ok = True
             login_or_signup()
-        elif answer in ["priceguesser", "price guesser", "guesse the price"]:
+            os.system('cls' if os.name == 'nt' else 'clear')
+        elif answer in ["priceguesser", "price guesser", "guesse the price", "pg"]:
             ok = True
             priceguesser()
+            os.system('cls' if os.name == 'nt' else 'clear')
+        elif answer in ["exit", "EXIT", "Exit"]:
+            ok = True
+            os.system('cls' if os.name == 'nt' else 'clear')
+            exit()
         else:
             print(" -> Sorry pls answer with logout or priceguesser, thank you. 🤗")
+
+# priceguesser
 
 def priceguesser():
     guessed = 0
@@ -103,7 +206,7 @@ def priceguesser():
     print("Now you can guess the price of very expensive objects! 💸")
     print("")
     print("Ok let's start with the first very expensive object, the first expensive")
-    object_number = random.randint(0,list_length-1)
+    object_number = random.randint(0, list_length - 1)
     object = expensive_objects_list[object_number]
     print(f"object is a {object}.")
     print("")
@@ -111,7 +214,7 @@ def priceguesser():
     while guessed < maxattempts:
         guessed += 1
         print(f"-> Attempt: {guessed}")
-        estimated_price = int( input("Estimated price in euro: "))
+        estimated_price = int(input("Estimated price in euro: "))
         if estimated_price > object.price:
             print("")
             print("Oh no, unfortunately the price you suggested is too high! 😨")
@@ -121,11 +224,30 @@ def priceguesser():
             print("")
         else:
             print("Very good, you guessed the price of this object!")
-            break  # Break the loop when the user guesses correctly
+            answer = input("Do you want to play again or get back to the commandbar?")
+            if answer in ["play again", "play again!"]:
+                priceguesser()
+            else:
+                os.system('cls' if os.name == 'nt' else 'clear')
+                what_do_you_want_to_do()
     else:
         print(f"Sorry, you didn't guess the price. The correct price is {object.price} euros.")
+
+# main
+
 def main():
     login_or_signup()
+    verify_data()  # Call to verify data after operations
 
-if __name__ == "__main__":
+###########################################################################################
+
+try:
     main()
+except Exception as e:
+    os.system('cls' if os.name == 'nt' else 'clear')
+    print(f"Ooops! PenguSystems {version}, has a bug and crashed! 😱")
+    print(f"Error: {e}")
+    print("Please contact the authors of this program to report this bug. 🤖")
+    print("")
+
+###########################################################################################
