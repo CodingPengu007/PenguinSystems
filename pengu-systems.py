@@ -1,6 +1,9 @@
 import subprocess
 import sys
 import os
+import bcrypt
+from getpass import getpass
+import random
 
 # Function to create and activate a virtual environment
 def setup_virtual_environment():
@@ -10,7 +13,10 @@ def setup_virtual_environment():
         print(f"Creating virtual environment: {venv_name}")
         subprocess.check_call([sys.executable, "-m", "venv", venv_name])
         print("Installing required packages...")
-        subprocess.check_call([os.path.join(venv_name, "bin", "pip"), "install", "jaydebeapi", "bcrypt"])
+        subprocess.check_call([os.path.join(venv_name, "bin", "pip"), "install", "bcrypt"])
+        print("Creating user_data.txt file...")
+        with open("user_data.txt", "w") as f:
+            f.write("username,password\n")
     else:
         print(f"Activating virtual environment: {venv_name}")
     
@@ -36,26 +42,21 @@ print("")
 
 ###########################################################################################
 
-import hashlib
-import jaydebeapi
-import bcrypt
-from getpass import getpass
-import random
-
 class usr:
     def __init__(self, name, pw) -> None:
         self.name = name
-        if len(pw) == 64:
+        # Check if the password is already hashed (bcrypt hashes are typically 60 characters long)
+        if len(pw) == 60:
             self.pw = pw
         else:
             self.pw = self._hash_password(pw)
 
     @staticmethod
     def _hash_password(password):
-        hash_object = hashlib.sha256()
-        hash_object.update(password.encode('utf-8'))
-        password_hash = hash_object.hexdigest()
-        return password_hash
+        password_bytes = password.encode('utf-8')
+        hashed = bcrypt.hashpw(password_bytes, bcrypt.gensalt())
+        return hashed.decode('utf-8')
+    
 user_list = []
 
 class expensive_objects:
@@ -70,20 +71,6 @@ expensive_objects_list.append(expensive_object)
 
 ###########################################################################################
 
-# Clean up lock file if exists
-lock_file_path = '/home/christoph/Desktop/python/pengu-systems/Data.odb.lck'
-if os.path.exists(lock_file_path):
-    os.remove(lock_file_path)
-
-# Initialize Database Connection
-hsqldb_jar = '/home/christoph/Desktop/python/hsqldb-2.7.4/hsqldb/lib/hsqldb.jar'
-url = 'jdbc:hsqldb:file:/home/christoph/Desktop/python/pengu-systems/Data.odb'
-
-conn = jaydebeapi.connect("org.hsqldb.jdbcDriver", url, ["SA", ""], hsqldb_jar)
-cursor = conn.cursor()
-
-conn.commit()
-
 # hash_password-check
 
 def hash_password(pw): 
@@ -94,28 +81,29 @@ def hash_password(pw):
 # load_users
 
 def load_users():
-    cursor.execute("SELECT username, password FROM UserData")
-    users = cursor.fetchall()
-    for name, pw in users:
-        user_list.append(usr(name, pw))
+    with open("user_data.txt", "r") as f:
+        next(f)  # Skip header line
+        for line in f:
+            name, pw = line.strip().split(",")
+            user_list.append(usr(name, pw))
 
 # save_user
 
 def save_user(user):
     print(f"Saving user: {user.name}, Password: {user.pw}")
-    cursor.execute("INSERT INTO UserData (username, password) VALUES (?, ?)", [user.name, user.pw])
-    conn.commit()
+    with open("user_data.txt", "a") as f:
+        f.write(f"{user.name},{user.pw}\n")
     print("User saved successfully")
     verify_data()
 
 # Verify Data
 
 def verify_data():
-    cursor.execute("SELECT id, username, password FROM UserData")
-    users = cursor.fetchall()
-    print("Verifying data in the database:")
-    for user in users:
-        print(user)
+    with open("user_data.txt", "r") as f:
+        next(f)  # Skip header line
+        print("Verifying data in the file:")
+        for line in f:
+            print(line.strip())
 
 # user_list
 
