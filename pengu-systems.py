@@ -1,9 +1,6 @@
 import subprocess
 import sys
 import os
-import bcrypt
-from getpass import getpass
-import random
 
 # Function to create and activate a virtual environment
 def setup_virtual_environment():
@@ -27,6 +24,10 @@ def setup_virtual_environment():
     else:
         activate_script = os.path.join(venv_name, "bin", "activate")
         subprocess.call(f"source {activate_script}", shell=True)
+
+    import bcrypt
+    from getpass import getpass
+    import random
 
 # Call the setup function
 setup_virtual_environment()
